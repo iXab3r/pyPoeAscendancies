@@ -2,8 +2,11 @@ import sqlite3
 import atexit
 from pprint import pprint
 from enum import Enum, unique
+from namedlist import namedlist
 
 import jsonpickle
+
+Comment = namedlist('Comment', ['body', 'score', 'author', ('polarity', 0), ('weightedScore', 0)])
 
 dbConn = sqlite3.connect('comments.db')
 dbConn.row_factory = sqlite3.Row
@@ -59,6 +62,9 @@ ascChanges = dict(
     [PoeAscendancy.Ascendant, '']]
 )
 
+def strFlatten(value):
+    return "\t".join( value.splitlines())
+
 def dbRecreate():
     #dbCursor.execute('DROP TABLE IF EXISTS comment')
     dbCursor.execute('CREATE TABLE IF NOT EXISTS `comment` (\
@@ -106,7 +112,10 @@ def dbGetComments(ascendancy = None):
     if ascendancy is not None:
         query = query + ' WHERE ascendancy = "{}"'.format(ascendancy.name)
     dbCursor.execute(query)
-    return dbCursor.fetchall()
+    return [Comment(
+        body=line['body'],
+        score=line['score'],
+        author=line['author']) for line in dbCursor.fetchall()]
 
 def dbUpdateStats(statsByAscendancy):
     for key in statsByAscendancy:

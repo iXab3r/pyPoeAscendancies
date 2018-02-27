@@ -1,6 +1,8 @@
 from poeShared import *
 from textblob.classifiers import NaiveBayesClassifier
 import numpy as np
+import terminaltables
+from terminaltables import AsciiTable
 
 dbRecreate()
 print('Number of rows in DB: {}'.format(dbCount()))
@@ -13,7 +15,7 @@ pprint(rowsPerAscendancy)
 
 resultsByAscendancy = dict()
 
-ascendanciesToProcess = PoeAscendancy#[PoeAscendancy.Saboteur]# PoeAscendancy# [PoeAscendancy.Pathfinder]
+ascendanciesToProcess = PoeAscendancy#[PoeAscendancy.Elementalist]  # PoeAscendancy# [PoeAscendancy.Pathfinder]
 
 train = [
     ('This is an amazing place!', 'pos'),
@@ -54,6 +56,7 @@ train = [
     ("looks cool", 'pos'),
     ("start looks promising", 'pos'),
     ("Got some sick", 'pos'),
+    ("positive", 'pos'),
 
     ("make this ascendancy a joke ", 'neg'),
     ("the worst ascendancy class", 'neg'),
@@ -99,29 +102,38 @@ train = [
 
 blobClassifier = NaiveBayesClassifier(train)
 
+
+def isValidComment(comment):
+    return (150 >= len(comment.body) >= 10) and (comment.score >= -2)
+
+
 for ascendancy in ascendanciesToProcess:
     print('Processing ascendancy {}'.format(ascendancy))
-    rawComments = dbGetComments(ascendancy)
-    cmts = [line["body"] for line in rawComments]
-    print('Analyzing {} comment(s)'.format(len(cmts)))
+    comments = dbGetComments(ascendancy)
+    print('Total: {} comment(s)'.format(len(comments)))
 
-    sentiments = []
-    for body in cmts:
-        if len(body) > 150 or len(body) < 10:
-            continue
-        print('processing {}'.format(body))
+    comments = [comment for comment in comments if isValidComment(comment)]
+    print('Analyzing {} comment(s)'.format(len(comments)))
 
-        blobClassification = blobClassifier.prob_classify(body)
-        blobClassificationPolarity = blobClassification.prob("pos")
-        if blobClassification.prob("pos") < 0.5 and blobClassification.prob("neg") < 0.5:
-            # avg
-            sentiments.append(0.5)
-            continue
+    table_data = [
+    ]
+    table = AsciiTable(table_data)
 
-        sentiments.append(blobClassification.prob("pos"))
-        print('\t result: {}\n'.format(blobClassification.prob("pos")))
+    for comment in comments:
+        print('processing {}'.format(strFlatten(comment.body)))
 
-    avg_polarity = np.mean(sentiments) if len(sentiments) > 0 else 0
+        blobClassification = blobClassifier.prob_classify(comment.body)
+        comment.polarity = blobClassification.prob("pos")
+        if 0.4 <= comment.polarity <= 0.6:
+            comment.polarity = 0.5
+
+        table_data.append([comment.polarity, strFlatten(comment.body)])
+
+    table_data.sort(key=lambda tup: tup[0])
+    table_data.insert(0, ['Polarity', 'Text'])
+
+    print(table.table)
+    avg_polarity = np.mean([comment.polarity for comment in comments]) if len(comments) > 0 else 0
 
     result = dict([
         ['Polarity', float(avg_polarity)],
@@ -144,5 +156,3 @@ pprint(polarityByAscendancy)
 leastPopular = min(polarityByAscendancy, key=polarityByAscendancy.get)
 mostPopular = max(polarityByAscendancy, key=polarityByAscendancy.get)
 print('Min: {} Max: {}'.format(leastPopular, mostPopular))
-
-
